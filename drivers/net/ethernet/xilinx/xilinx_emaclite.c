@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
@@ -1172,7 +1173,7 @@ static int xemaclite_of_probe(struct platform_device *ofdev)
 
 	if (mac_address)
 		/* Set the MAC address. */
-		memcpy(ndev->dev_addr, mac_address, ETH_ALEN);
+		memcpy(ndev->dev_addr, mac_address, 6);
 	else
 		dev_warn(dev, "No MAC address found\n");
 
