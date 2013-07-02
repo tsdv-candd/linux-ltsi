@@ -48,12 +48,6 @@ config ARCH_EMEV2
 	select ARM_GIC
 	select ARCH_WANT_OPTIONAL_GPIOLIB
 
-config ARCH_EMEV2
-	bool "Emma Mobile EV2"
-	select CPU_V7
-	select ARM_GIC
-	select ARCH_WANT_OPTIONAL_GPIOLIB
-
 comment "SH-Mobile Board Type"
 
 config MACH_G3EVM
