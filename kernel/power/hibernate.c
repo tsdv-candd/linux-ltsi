@@ -367,7 +367,7 @@ int hibernation_snapshot(int platform_mode)
 	 * returns here (1) after the image has been created or the
 	 * image creation has failed and (2) after a successful restore.
 	 */
-
+Resume_devices:
 	/* We may need to release the preallocated image pages here. */
 	if (error || !in_suspend)
 		swsusp_free();
@@ -385,6 +385,10 @@ int hibernation_snapshot(int platform_mode)
  Close:
 	platform_end(platform_mode);
 	return error;
+
+ Recover_platform:
+	platform_recover(platform_mode);
+	goto Resume_devices;
 
  Thaw:
 	thaw_kernel_threads();
