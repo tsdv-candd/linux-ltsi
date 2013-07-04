@@ -401,9 +401,9 @@ static void at91ether_check_link(unsigned long dev_id)
 	struct at91_private *lp = netdev_priv(dev);
 
 	spin_lock_irq(&lp->lock);
-	enable_mdi(lp);
+	enable_mdi();
 	update_linkspeed(dev, 1);
-	disable_mdi(lp);
+	disable_mdi();
 	spin_unlock_irq(&lp->lock);
 
 	mod_timer(&lp->check_timer, jiffies + LINK_POLL_INTERVAL);

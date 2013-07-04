@@ -73,10 +73,7 @@ static void irq_domain_add(struct irq_domain *domain)
 	mutex_unlock(&irq_domain_mutex);
 	pr_debug("Allocated domain of type %d @0x%p\n",
 		 domain->revmap_type, domain);
-
-	irq_domain_free(domain);
 }
-EXPORT_SYMBOL_GPL(irq_domain_remove);
 
 /**
  * irq_domain_remove() - Remove an irq domain.
