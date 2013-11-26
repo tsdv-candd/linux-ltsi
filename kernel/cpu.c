@@ -78,6 +78,7 @@ struct hotplug_pcp {
 	int refcount;
 	int grab_lock;
 	struct completion synced;
+	struct completion unplug_wait;
 #ifdef CONFIG_PREEMPT_RT_FULL
 	spinlock_t lock;
 #else
@@ -175,6 +176,7 @@ static int sync_unplug_thread(void *data)
 {
 	struct hotplug_pcp *hp = data;
 
+	wait_for_completion(&hp->unplug_wait);
 	preempt_disable();
 	hp->unplug = current;
 	wait_for_pinned_cpus(hp);
@@ -240,6 +242,14 @@ static void __cpu_unplug_sync(struct hotplug_pcp *hp)
 	wait_for_completion(&hp->synced);
 }
 
+static void __cpu_unplug_wait(unsigned int cpu)
+{
+	struct hotplug_pcp *hp = &per_cpu(hotplug_pcp, cpu);
+
+	complete(&hp->unplug_wait);
+	wait_for_completion(&hp->synced);
+}
+
 /*
  * Start the sync_unplug_thread on the target cpu and wait for it to
  * complete.
@@ -263,6 +273,7 @@ static int cpu_unplug_begin(unsigned int cpu)
 	tell_sched_cpu_down_begin(cpu);
 
 	init_completion(&hp->synced);
+	init_completion(&hp->unplug_wait);
 
 	hp->sync_tsk = kthread_create(sync_unplug_thread, hp, "sync_unplug/%d", cpu);
 	if (IS_ERR(hp->sync_tsk)) {
@@ -278,8 +289,7 @@ static int cpu_unplug_begin(unsigned int cpu)
 	 * wait for tasks that are going to enter these sections and
 	 * we must not have them block.
 	 */
-	__cpu_unplug_sync(hp);
-
+	wake_up_process(hp->sync_tsk);
 	return 0;
 }
 
@@ -507,6 +517,7 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 		.hcpu = hcpu,
 	};
 	cpumask_var_t cpumask;
+	cpumask_var_t cpumask_org;
 
 	if (num_online_cpus() == 1)
 		return -EBUSY;
@@ -517,6 +528,12 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 	/* Move the downtaker off the unplug cpu */
 	if (!alloc_cpumask_var(&cpumask, GFP_KERNEL))
 		return -ENOMEM;
+	if (!alloc_cpumask_var(&cpumask_org, GFP_KERNEL))  {
+		free_cpumask_var(cpumask);
+		return -ENOMEM;
+	}
+
+	cpumask_copy(cpumask_org, tsk_cpus_allowed(current));
 	cpumask_andnot(cpumask, cpu_online_mask, cpumask_of(cpu));
 	set_cpus_allowed_ptr(current, cpumask);
 	free_cpumask_var(cpumask);
@@ -525,7 +542,8 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 	if (mycpu == cpu) {
 		printk(KERN_ERR "Yuck! Still on unplug CPU\n!");
 		migrate_enable();
-		return -EBUSY;
+		err = -EBUSY;
+		goto restore_cpus;
 	}
 
 	cpu_hotplug_begin();
@@ -543,6 +561,8 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen)
 				__func__, cpu);
 		goto out_release;
 	}
+
+	__cpu_unplug_wait(cpu);
 
 	/* Notifiers are done. Don't let any more tasks pin this CPU. */
 	cpu_unplug_sync(cpu);
@@ -581,6 +601,9 @@ out_cancel:
 	cpu_hotplug_done();
 	if (!err)
 		cpu_notify_nofail(CPU_POST_DEAD | mod, hcpu);
+restore_cpus:
+	set_cpus_allowed_ptr(current, cpumask_org);
+	free_cpumask_var(cpumask_org);
 	return err;
 }
 
